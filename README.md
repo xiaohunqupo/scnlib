@@ -42,10 +42,6 @@ other direction.
 This library is the reference implementation of the ISO C++ standards proposal
 [P1729 "Text Parsing"](https://wg21.link/p1729).
 
-The previous major release (v1.1.3) is hosted at the `v1`-branch.
-It has a substantially different interface, and support for C++11 and C++14,
-but it's unlikely that it'll get updated.
-
 ## Documentation
 
 The documentation can be found online, from https://scnlib.dev.
@@ -112,13 +108,10 @@ int main() {
 ```cpp
 #include <scn/scan.h>
 
-// scn::ranges is
-//  - std::ranges on C++20 or later (if available)
-//  - nano::ranges on C++17 (bundled implementation)
-namespace ranges = scn::ranges;
+#include <ranges>
 
 int main() {
-    auto result = scn::scan<int>("123" | ranges::views::reverse, "{}");
+    auto result = scn::scan<int>("123" | std::views::reverse, "{}");
     // result == true
     // result->begin() is an iterator into a reverse_view
     // result->range() is empty
@@ -134,7 +127,7 @@ int main() {
 
 int main() {
     std::vector<int> vec{};
-    auto input = scn::ranges::subrange{std::string_view{"123 456 789"}};
+    auto input = scn::ranges::subrange{"123 456 789"sv};
     
     while (auto result = scn::scan<int>(input), "{}")) {
         vec.push_back(result->value());
@@ -171,6 +164,10 @@ whatever means you like:
 `make install` + `find_package`, `FetchContent`, `git submodule` + `add_subdirectory`,
 or something else.
 
+There are community-maintained packages available
+on [Conan](https://conan.io/center/recipes/scnlib) and
+on [vcpkg](https://github.com/microsoft/vcpkg/tree/master/ports/scnlib).
+
 The `scnlib` CMake target is `scn::scn`
 
 ```cmake
@@ -194,9 +191,10 @@ Including the following environments:
 
 * 32-bit and 64-bit builds on Windows
 * libc++ on Linux
-* AppleClang on macOS 11 (Big Sur) and 12 (Monterey)
+* gcc on Alpine Linux
+* AppleClang and gcc on macOS 12 (Monterey) and 14 (Sonoma)
 * clang-cl with VS 2019 and 2022
-* MinGW
+* MinGW and MSys2
 * GCC on armv6, armv7, aarch64, riscv64, s390x, and ppc64le
 * Visual Studio 2022, cross compiling to arm64
 
@@ -211,30 +209,31 @@ Lower is better.
 
 ![Integer result, chart](benchmark/runtime/results/int.png)
 
-| Test                     | Test 1 `"single"` | Test 2 `"repeated"` |
-|:-------------------------|------------------:|--------------------:|
-| `scn::scan`              |              27.2 |                34.4 |
-| `scn::scan_value`        |              22.2 |                29.9 |
-| `scn::scan_int`          |              16.8 |                24.7 |
-| `std::stringstream`      |               112 |                56.2 |
-| `sscanf`                 |              72.1 |                 477 |
-| `strtol`                 |              16.5 |                24.5 |
-| `std::from_chars`        |              8.16 |                13.5 |
-| `fast_float::from_chars` |              7.23 |                12.0 |
+| Test                             | Test 1 `"single"` | Test 2 `"repeated"` | Test average |
+|:---------------------------------|------------------:|--------------------:|-------------:|
+| `scn::scan`                      |              23.8 |                30.4 |         27.1 |
+| `scn::scan_value`                |              20.5 |                27.4 |         24.0 |
+| `scn::scan_int`                  |              16.5 |                24.1 |         20.3 |
+| `scn::scan_int_exhaustive_valid` |              4.08 |                   - |         4.08 |
+| `std::stringstream`              |               117 |                53.9 |         85.5 |
+| `sscanf`                         |              71.3 |                 474 |        272.7 |
+| `strtol`                         |              16.3 |                23.8 |         20.1 |
+| `std::from_chars`                |              8.73 |                13.0 |         10.9 |
+| `fast_float::from_chars`         |              6.87 |                11.8 |         9.35 |
 
 #### Floating-point number parsing (`double`)
 
 ![Float result, chart](benchmark/runtime/results/float.png)
 
-| Test                     | Test 1 `"single"` | Test 2 `"repeated"` |
-|:-------------------------|------------------:|--------------------:|
-| `scn::scan`              |              66.3 |                82.7 |
-| `scn::scan_value`        |              61.9 |                76.7 |
-| `std::stringstream`      |               270 |                 272 |
-| `sscanf`                 |               161 |                 713 |
-| `strtod`                 |              85.1 |                 155 |
-| `std::from_chars`        |              15.7 |                29.1 |
-| `fast_float::from_chars` |              16.6 |                29.1 |
+| Test                     | Test 1 `"single"` | Test 2 `"repeated"` | Test Average |
+|:-------------------------|------------------:|--------------------:|-------------:|
+| `scn::scan`              |              55.8 |                63.7 |         59.7 |
+| `scn::scan_value`        |              52.1 |                58.8 |         55.5 |
+| `std::stringstream`      |               294 |                 271 |          283 |
+| `sscanf`                 |               159 |                 704 |          432 |
+| `strtod`                 |              79.1 |                 153 |          116 |
+| `std::from_chars`        |              18.0 |                28.1 |         23.0 |
+| `fast_float::from_chars` |              20.6 |                27.8 |         24.2 |
 
 #### String "word" (whitespace-separated character sequence) parsing (`string` and `string_view`)
 
@@ -242,12 +241,12 @@ Lower is better.
 
 | Test                           |      |
 |:-------------------------------|-----:|
-| `scn::scan<string>`            | 32.4 |
-| `scn::scan<string_view>`       | 25.2 |
-| `scn::scan_value<string>`      | 24.5 |
-| `scn::scan_value<string_view>` | 20.7 |
-| `std::stringstream`            |  127 |
-| `sscanf`                       | 99.7 |
+| `scn::scan<string>`            | 24.5 |
+| `scn::scan<string_view>`       | 22.2 |
+| `scn::scan_value<string>`      | 23.1 |
+| `scn::scan_value<string_view>` | 21.0 |
+| `std::stringstream`            |  134 |
+| `sscanf`                       | 58.4 |
 
 #### Conclusions
 
@@ -258,6 +257,7 @@ Lower is better.
 * `scn::scan_value` is slightly faster compared to `scn::scan`
 * `scn::scan_int` is faster than both `scn::scan` and `scn::scan_value`
 * `strtol` is ~on-par with `scn::scan_int`.
+* `scn::scan_int_exhaustive_valid` is blazing-fast.
 
 #### About
 
@@ -277,18 +277,16 @@ Above,
 
 The difference between "Test 1" and "Test 2" is most pronounced when using
 a `stringstream`, which is relatively expensive to construct,
-and seems to be adding around ~100ns of runtime.
+and seems to be adding around ~50ns of runtime.
 With `sscanf`, it seems like using the `%n` specifier and skipping whitespace
 are really expensive (~400ns of runtime).
 With `scn::scan` and `std::from_chars`, there's really no state to construct,
 and the results for "Test 1" and "Test 2" are thus quite similar.
 
-These benchmarks were run on a Fedora 39 machine, running Linux kernel version
-6.6.8, with an AMD Ryzen 7 5700X processor, and compiled with clang version
-17.0.6,
+These benchmarks were run on a Fedora 40 machine, running Linux kernel version
+6.8.9, with an AMD Ryzen 7 5700X processor, and compiled with clang version 18.1.1,
 with `-O3 -DNDEBUG -march=haswell` and LTO enabled.
-C++20 was used, with the library-bundled ranges implementation (`nanorange`).
-These benchmarks were run on 2024-01-09 (commit 629c3c5).
+These benchmarks were run on 2024-05-23 (commit 3fd830de).
 
 The source code for these benchmarks can be found in the `benchmark` directory.
 You can run these benchmarks yourself by enabling the CMake
@@ -316,14 +314,14 @@ Lower is better.
 
 ![Release result, chart](benchmark/binarysize/graph-release.png)
 
-Size of `scnlib` shared library (`.so`): 1.4M
+Size of `scnlib` shared library (`.so`): 1.7M
 
 | Method         | Executable size | Stripped size |
-|:---------------|----------------:|--------------:|
-| empty          |            16.1 |          14.6 |
-| `std::scanf`   |            17.4 |          14.8 |
-| `std::istream` |            17.8 |          14.8 |
-| `scn::input`   |            17.7 |          14.8 |
+| :------------- | --------------: | ------------: |
+| empty          |             7.6 |           4.4 |
+| `std::scanf`   |            10.4 |           5.8 |
+| `std::istream` |            11.1 |           6.2 |
+| `scn::input`   |            11.2 |           6.4 |
 
 #### Minimized (MinSizeRel) build (`-Os -DNDEBUG` + LTO)
 
@@ -332,31 +330,30 @@ Size of `scnlib` shared library (`.so`): 1.4M
 Size of `scnlib` shared library (`.so`): 1.1M
 
 | Method         | Executable size | Stripped size |
-|:---------------|----------------:|--------------:|
-| empty          |            16.1 |          14.6 |
-| `std::scanf`   |            17.3 |          14.8 |
-| `std::istream` |            17.7 |          14.8 |
-| `scn::input`   |            18.8 |          14.8 |
+| :------------- | --------------: | ------------: |
+| empty          |             7.5 |           4.4 |
+| `std::scanf`   |            10.3 |           5.8 |
+| `std::istream` |            11.0 |           6.1 |
+| `scn::input`   |            12.4 |           6.6 |
 
 #### Debug build (`-g -O0`)
 
 ![Debug result, chart](benchmark/binarysize/graph-debug.png)
 
-Size of `scnlib` shared library (`.so`): 19M
+Size of `scnlib` shared library (`.so`): 20M
 
 | Method         | Executable size | Stripped size |
-|:---------------|----------------:|--------------:|
-| empty          |            25.6 |          14.6 |
-| `std::scanf`   |             569 |          26.9 |
-| `std::istream` |             527 |          18.8 |
-| `scn::input`   |            2112 |          42.8 |
+| :------------- | --------------: | ------------: |
+| empty          |            18.4 |           5.2 |
+| `std::scanf`   |             429 |          11.8 |
+| `std::istream` |             438 |           9.4 |
+| `scn::input`   |            2234 |          51.3 |
 
 #### Conclusions
 
 When using optimized builds, depending on compiler flags, scnlib provides a
 binary, the size of which is within ~5% of what would be produced with `scanf`
-or `<iostream>`s. Interestingly, when doing a MinSizeRel-build,
-the scnlib binary is bigger, than when doing a Release-build.
+or `<iostream>`s.
 In a Debug-environment, scnlib is ~5x bigger when compared to `scanf`
 or `<iostream>`. After `strip`ing the binaries,
 these differences largely go away, except in Debug builds.
@@ -369,7 +366,7 @@ This is done to simulate a small project.
 `scnlib` is linked dynamically, to level the playing field with the standard
 library, which is also dynamically linked.
 
-The code was compiled on Fedora 39, with gcc 13.2.1.
+The code was compiled on Fedora 40, with gcc 14.1.1.
 See the directory `benchmark/binarysize` for the source code.
 
 You can run these benchmarks yourself by enabling the CMake
@@ -401,9 +398,9 @@ Lower is better.
 | Method       | Debug | Release |
 |:-------------|------:|--------:|
 | empty        |  0.05 |    0.05 |
-| `scanf`      |  0.20 |    0.19 |
-| `<iostream>` |  0.26 |    0.25 |
-| `scn::input` |  1.06 |    0.97 |
+| `scanf`      |  0.22 |    0.20 |
+| `<iostream>` |  0.28 |    0.27 |
+| `scn::input` |  0.54 |    0.45 |
 
 #### Memory consumption
 
@@ -413,15 +410,15 @@ Lower is better.
 | Method       | Debug | Release |
 |:-------------|------:|--------:|
 | empty        |  21.0 |    23.3 |
-| `scanf`      |  54.7 |    52.4 |
-| `<iostream>` |  66.4 |    63.9 |
-| `scn::input` |   203 |     185 |
+| `scanf`      |  56.3 |    53.6 |
+| `<iostream>` |  67.8 |    65.0 |
+| `scn::input` |   102 |    91.0 |
 
 #### Conclusions
 
-Code using scnlib takes around 3x-5x longer to compile compared to `<iostream>`,
-and also uses around 3x-4x more memory.
-Debug and Release builds make no major difference.
+Code using scnlib takes around 2x longer to compile compared to `<iostream>`,
+and also uses around 1.5x more memory.
+Release builds seem to be slightly faster as compared to Debug builds.
 
 #### About
 
@@ -430,8 +427,8 @@ libraries.
 The time taken to compile the library itself is not taken into account (the
 standard library is precompiled, anyway).
 
-These tests were run on a Fedora 39 machine, with an AMD Ryzen 7 5700X
-processor, using gcc version 13.2.1.
+These tests were run on a Fedora 40 machine, with an AMD Ryzen 7 5700X
+processor, using gcc version 14.1.1.
 The compiler flags used for a Debug build were `-g`, and `-O3 -DNDEBUG` for a
 Release build.
 
@@ -461,14 +458,11 @@ https://github.com/r1chardj0n3s/parse
 
 ### Third-party libraries
 
-NanoRange for C++17 Ranges implementation:  
-https://github.com/tcbrindle/NanoRange
-
 fast_float for floating-point number parsing:  
 https://github.com/fastfloat/fast_float
 
-simdutf for Unicode handling:  
-https://github.com/simdutf/simdutf
+NanoRange for a minimal `<ranges>` implementation:  
+https://github.com/tcbrindle/NanoRange
 
 ## License
 

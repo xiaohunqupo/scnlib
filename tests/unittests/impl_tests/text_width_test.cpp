@@ -17,7 +17,7 @@
 
 #include "../wrapped_gtest.h"
 
-#include <scn/impl/algorithms/take_width_view.h>
+#include <scn/impl.h>
 
 using namespace std::string_view_literals;
 
@@ -65,9 +65,10 @@ TEST(TakeWidthViewTest, TakeMoreThanSource)
 }
 TEST(TakeWidthViewTest, FindCodeUnitNotInRange)
 {
-    auto v = scn::impl::take_width("åäö", 2);
-    auto it = scn::ranges::find(v, ' ');
-    EXPECT_EQ(it, v.end());
+    auto v = scn::impl::take_width("åäö"sv, 2);
+    for (auto it = v.begin(); it != v.end(); ++it) {
+        EXPECT_NE(*it, ' ');
+    }
 }
 TEST(TakeWidthViewTest, BidirectionalSimpleCodePoints)
 {

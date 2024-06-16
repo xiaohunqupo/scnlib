@@ -2,7 +2,7 @@
 
 import fnmatch
 import os
-import pathlib
+import sys
 import subprocess
 
 
@@ -18,8 +18,13 @@ if os.name == 'nt':
     examples_file_extension = '.exe'
 else:
     examples_file_extension = ''
-script_dir = os.path.abspath(os.path.dirname(__file__))
-examples_bin = find_file(f"scn_example_*{examples_file_extension}", script_dir)
+
+cmd_args = sys.argv[1:]
+if len(cmd_args) != 1:
+    raise RuntimeError(
+        f"Expected a single command-line argument, containing path to example binaries, got {cmd_args} instead")
+examples_root_dir = os.path.normpath(cmd_args[0])
+examples_bin = find_file(f"scn_example*{examples_file_extension}", examples_root_dir)
 examples_dir = os.path.dirname(examples_bin)
 
 

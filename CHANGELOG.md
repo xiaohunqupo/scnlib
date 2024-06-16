@@ -1,30 +1,180 @@
-# 2.0.2
+# Changelog
+
+## 3.0.1
+
+_Released 2024-06-15_
+
+ * Bump `SOVERSION` to 3. (reported in #117, thanks [@xvitaly (Vitaly)](https://github.com/xvitaly))
+ * Call `find_package` in CMake iff a target is not already defined (reported in #118, thanks [@ajtribick](https://github.com/ajtribick))
+ * Remove `find_dependency(Threads)` from `scn-config.cmake`
+
+## 3.0.0
+
+_Released 2024-06-08_
+
+### Breaking changes
+
+ * The default behavior for scanning integers is now `d` (decimal) instead of `i` (detect base from prefix).
+
+```cpp
+// v3
+auto result = scn::scan<int>("077", "{}");
+// result->value() == 77
+result = scn::scan<int>("078", "{}");
+// result->value() == 78
+
+// v2
+auto result = scn::scan<int>("077", "{}");
+// result->value() == 63
+result = scn::scan<int>("078", "{}");
+// result->value() == 7
+// result->range() == "8"
+// (Because of the '0' prefix, an octal number is expected,
+//  and '8' is not a valid octal digit, so reading is stopped)
+```
+
+ * A large part of the bundled `<ranges>`-implementation is removed.
+   Only the parts strictly needed for the library are included.
+   * The library no longer uses a stdlib provided `<ranges>`, even if available.
+   * This cut down compile times massively for library consumers
+   * You now may need to specialize `scn::ranges::enable_borrowed_range` for your own range types,
+     even if you've already specialized `std::ranges::enable_borrowed_range`.
+     Specializations of `std::basic_string_view` are already borrowed out of the box.
+
+```cpp
+// std::span is a borrowed_range,
+// but scnlib doesn't know about it
+auto result = scn::scan<...>(std::span{...}, ...);
+// decltype(result->range()) is scn::ranges::dangling
+
+namespace scn::ranges {
+template <typename T, size_t E>
+inline constexpr bool enable_borrowed_range<std::span<T, E>> = true;
+}
+
+auto result = scn::scan<...>(std::span{...}, ...);
+// decltype(result->range()) is a scn::ranges::subrange<const T*>
+```
+
+ * `scn::span` is removed
+ * `scan_arg_store` and `borrowed_subrange_with_sentinel` are removed from the public interface
+ * `scan_arg_store` is changed to be non-copyable and non-movable, for correctness reasons
+   (it holds references to itself, copying and moving would be needlessly expensive)
+ * The interface of `make_scan_result` is changed to take a `tuple` instead of the now unmovable `scan_arg_store`.
+
+```cpp
+// v3
+auto args = make_scan_args<scan_context, Args...>();
+auto result = vscan(source, format, args);
+return make_scan_result(std::move(result), std::move(args.args()));
+
+// v2
+auto args = make_scan_args<scan_context, Args...>();
+auto result = vscan(source, format, args);
+return make_scan_result(std::move(result), std::move(args));
+```
+
+ * The meaning of the "width" field in format specifiers is changed to mean the _minimum_ field width
+   (like in `std::format`), instead of the _maximum_ (sort of like in `scanf`)
+
+```cpp
+// v3
+auto result = std::scan<int>("123", "{:2}");
+// result->value() == 123
+// result->range() == ""
+
+// v2
+auto result = std::scan<int>("123", "{:2}");
+// result->value() == 12
+// result->range() == "3"
+```
+
+### Features
+
+ * The "precision" field is added as a format specifier,
+   which specifies the maximum fields width to scan (like in `std::format`)
+
+```cpp
+// Scan up to 2 width units
+auto result = scn::scan<int>("123", "{:.2}");
+// result->value() == 12
+// result->range() == "3"
+```
+
+* Support for field fill and alignment is added.
+  This interacts well with the new width and precision fields
+
+```cpp
+// Read an integer, aligned to the right ('>'), with asterisks ('*')
+auto result = std::scan<int>("***42", "{:*>}");
+// result->value() == 42
+// result->range() == ""
+
+// Read an integer, aligned to the left ('<'), with whitespace (default),
+// with a maximum total width of 3
+auto result = std::scan<int>("42  ", "{:<.3}");
+// result->value() == 42
+// result->range() == " "
+```
+
+ * In general, there seems to be a ~10% to 20% improvement in run-time performance.
+ 
+### Changes
+
+ * The dependency on `simdutf` is removed. The library now has no external dependencies to compiled libraries
+   (FastFloat, an internal dependency, is a header-only library)
+ * The number of source files is dramatically decreased: there are now just the public headers, 
+   a private implementation header, and a private implementation source file. This cuts down the time needed to
+   compile the library, and any user code including it to a half (yes, really!)
+
+### Fixes
+
+ * Fix skipping of multiple characters of whitespace in the format string (reported in #116, thanks [@Jonathan-Greve (Jonathan Bjørn Greve)](https://github.com/Jonathan-Greve))
+
+## 2.0.3
+
+_Released 2024-05-19_
+
+### Fixes
+
+ * Fix documentation: default format type specifier for integers is `i`, not `d`:
+   when not explicitly specified by a format specifier, the base of an integer is determined based on its prefix:
+   `0x...` is hexadecimal, `0...` or `0o...` is octal, `0b...` is binary, and everything else is decimal.
+ * Fix a compilation error which would occur when scanning more than 11 arguments with `scn::scan`.
+ * Small CMake adjustments to better support use as a subproject (#113, thanks [@frankmiller (Frank Miller)](https://github.com/frankmiller))
+ * Fix misplaced include of `GNUInstallDirs` in CMake (#111, thanks [@WangWeiLin-MV](https://github.com/WangWeiLin-MV))
+ * Allow for externally installed versions for GTest and Google Benchmark (#112, thanks [@xvitaly (Vitaly)](https://github.com/xvitaly))
+ * Adjust the definition of `SCN_COMPILER` to fix usage with a recent Clang using modules (#109, thanks [@Delta-dev-99 (Armando Martin)](https://github.com/Delta-dev-99))
+ * Allow for more versions of dependencies (simdutf, fast_float)
+ * Fix C++23 build failure caused by missing inclusion of `<utility>` for `std::unreachable`
+
+## 2.0.2
 
 _Released 2024-02-19_
 
-## Fixes
+### Fixes
 
  * Fix segfault when runtime-parsing `{:[^` as a format string.
  * Fix compilation of `scan_buffer.cpp` on some MSVC versions.
  * Remove stray `test/` folder
 
-# 2.0.1
+## 2.0.1
 
 _Released 2024-02-12_
 
-## Fixes
+### Fixes
 
  * Fix detection of support for `std::regex_constants::multiline` (#98, thanks [@jiayuehua (Jia Yue Hua)](https://github.com/jiayuehua))
  * Fix builds of `float_reader` on Android SDK < v28 (#99, thanks [@jiayuehua (Jia Yue Hua)](https://github.com/jiayuehua))
  * Fix typo in README example (#100, thanks [@ednolan (Eddie Nolan)](https://github.com/ednolan))
 
-# 2.0.0
+## 2.0.0
 
 _Released 2024-01-19_
 
 Changes are in comparison to 2.0.0-beta.
 
-## Features
+### Features
 
  * Regular expression scanning in `<scn/regex.h>`
  * Scanning of `FILE*`s.
@@ -38,7 +188,7 @@ Changes are in comparison to 2.0.0-beta.
    * These can be useful in some constrained environments, where these facilities are either not available or not used
    * Thanks [@cjvaughter (CJ Vaughter)](https://github.com/cjvaughter) for the original implementation in v1 in #70 and #71
 
-## Changes
+### Changes
 
  * `scn::basic_istreambuf_view` removed.
    * Sort-of replaced by being able to scan from `FILE`s.
@@ -49,7 +199,7 @@ Changes are in comparison to 2.0.0-beta.
    Use regular expressions instead, or explicitly state the character range (like `a-zA-Z` for `:alpha:`).
  * `scn::runtime` renamed to `scn::runtime_format`.
 
-## Fixes and small changes
+### Fixes and small changes
 
  * Update implementation of `scn::span`
  * Fix handling of literal space characters in format strings
@@ -58,7 +208,7 @@ Changes are in comparison to 2.0.0-beta.
    (see #89, thanks [@ldeng-ustc (Long Deng)](https://github.com/ldeng-ustc) for the idea)
  * Add install destination for shared libraries (thanks [@uilianries (Uilian Ries)](https://github.com/uilianries))
 
-# 2.0.0-beta
+## 2.0.0-beta
 
 _Released 2023-10-29_
 
@@ -81,14 +231,14 @@ Major changes include:
 * Performance improvements
 * Completely reworked internals
 
-# 1.1.3
+## 1.1.3
 
 _Released 2023-11-05_
 
 Expected to be the last release in the v1-branch.
 Development efforts are now fully directed towards v2.
 
-## Features
+### Features
 
 * Allow disabling support for individual types with `SCN_DISABLE_TYPE_*` (#70, thanks [@cjvaughter (CJ Vaughter)](https://github.com/cjvaughter))
     * Also, allow for disabling the fallbacks to `std::from_chars` and `std::strtod` when scanning floats
@@ -96,7 +246,7 @@ Development efforts are now fully directed towards v2.
 * Allow disabling runtime localization with `SCN_DISABLE_LOCALE` (#71, thanks [@cjvaughter (CJ Vaughter)](https://github.com/cjvaughter))
 * Parse leading `+` signs in floats (reported in #77)
 
-## Fixes
+### Fixes
 
 * Fix `scn::wrap(std::string_view&&)` being ambiguous on gcc (reported in #83)
 * Fix compiler error in `scn::basic_string_view<CharT>::substr` (reported in #86)
@@ -108,13 +258,13 @@ Development efforts are now fully directed towards v2.
 * Use `if constexpr` and `std::unreachable` if available (#61, #78, thanks [@matbech (Mathias Berchtold)](https://github.com/matbech))
 * Improve error messages given from the float parser
 
-# 1.1.2
+## 1.1.2
 
 _Released 2022-03-19_
 
 * Change `SCN_VERSION` to report the correct version number: 1.1.0 -> 1.1.2 (#57)
 
-# 1.1.1
+## 1.1.1
 
 _Released 2022-03-16_
 
@@ -132,7 +282,7 @@ ret.range().reset_begin_iterator();
 ret = scn::input("{}", i);
 ```
 
-# 1.1
+## 1.1
 
 _Released 2022-03-12_
 
@@ -154,7 +304,7 @@ auto ret = scn::scan("1 2 3 4", "{} {:c} {} {:i}", i1, i2, i3, i4);
 * Fix tests on big endian architectures (#54)
 * Fix alignment issues with `small_vector` on 32-bit architectures
 
-# 1.0
+## 1.0
 
 _Released 2022-02-28_
 
@@ -164,11 +314,11 @@ _Released 2022-02-28_
 * Update benchmark results
 * Update submodules
 
-# 1.0-rc1
+## 1.0-rc1
 
 _Released 2022-02-21_
 
-## Additions
+### Additions
 
 * Unicode support
     * Ranges and format strings are assumed to be UTF-8 (narrow), UTF-16 (wide, Windows), or UTF-32 (wide, POSIX), regardless of locale
@@ -178,7 +328,7 @@ _Released 2022-02-21_
 * Add `scn::scan_usertype` and `scn::vscan_usertype`
 * Add `<scn/fwd.h>` header file
 
-## Changes
+### Changes
 
 * Redesigned format strings
     * Alignment, fill, width flags
@@ -197,7 +347,7 @@ _Released 2022-02-21_
     * Add `scn::make_args_for`, `scn::make_context`, and `scn::make_parse_context`
 * `[[nodiscard]]` added where necessary
 
-## Fixes and minor stuff
+### Fixes and minor stuff
 
 * Update bloat benchmarks
 * Add a lot more tests
@@ -210,11 +360,11 @@ _Released 2022-02-21_
 * Update submodules
 * Numerous bug fixes
 
-# 0.4
+## 0.4
 
 _Released 2020-11-13_
 
-## Changes and removals
+### Changes and removals
 
 * Rework source range handling:
     * Non-views are now accepted as source ranges --
@@ -237,12 +387,12 @@ _Released 2020-11-13_
     * Integrate standard library Ranges, if available: `scn::std_ranges` aliased to `std::ranges`
     * Use stdlib Ranges, if available, fall back to custom implementation: namespace alias `scn::ranges`, control behavior with `SCN_USE_STD_RANGES`
 
-## Additions
+### Additions
 
 * Add more thorough documentation, tests, benchmarks and examples
 * Add `scan_list_until`
 
-## Fixes and minor stuff
+### Fixes and minor stuff
 
 * Fix float parsing not being locale-agnostic when global C locale was not `"C"`
   (#24, thanks [@petrmanek (Petr Mánek)](https://github.com/petrmanek) and
@@ -256,13 +406,13 @@ _Released 2020-11-13_
 * Move to readthedocs (https://scnlib.readthedocs.com) from https://scnlib.dev
 * Move to GitHub Actions from Travis and Appveyor
 
-# 0.3
+## 0.3
 
 _Released 2020-02-19_
 
 Largely a bugfix release
 
-## Changes
+### Changes
 
 * Remove support for partial successes
     * If the reading of any of the arguments given to `scan` fail, the whole function fails
@@ -270,7 +420,7 @@ Largely a bugfix release
 * Overhaul list scanning
     * Add `scan_list`
 
-## Fixes
+### Fixes
 
 * Fix issues with `std::string_view` and MSVC debug iterators (#11, #14, #18, #20)
 * Fix some issues with scanning customized types (#15)
@@ -281,41 +431,41 @@ Largely a bugfix release
 
 Thanks to [@nanoric](https://github.com/nanoric) and [@SuperWig (Daniel Marshall)](https://github.com/SuperWig) for bug reports!
 
-## Removals
+### Removals
 
 * Remove support for non-`std::char_traits` `std::string`s
 * Remove support for clang 3.6
 
-# 0.2
+## 0.2
 
 _Released 2019-10-18_
 
-## Major changes
+### Major changes
 
 * Remove the notion of streams, and replace them with ranges
     * Using a hand-written minimal ranges implementation based on NanoRange: https://github.com/tcbrindle/NanoRange
     * A lot of things changed, renamed or removed because of this
 
-## Additions
+### Additions
 
 * Add zero-copy parsing of `string_view`s from a `contiguous_range`
     * Works like parsing a `std::string`, except the pointers of the `string_view` are directed to the input range
 * Add `scan_list`
 * Add experimental memory mapped file reading support
 
-## Removals
+### Removals
 
 * Remove `scn::options` and `scn::scan` overloads taking one
 * Remove parsing algorithms based on `std::strto*`, `std::sto*` and `std::from_chars`
 * Remove reading from a `std::basic_istream`
 
-## Changes
+### Changes
 
 * Rename `scan(locale, ...)` to `scan_localized(...)`
 * Fix UB in `small_vector` using `std::aligned_storage` and `std::aligned_union`
 * _And probably tons more that I've not written down anywhere_
 
-# 0.1.2
+## 0.1.2
 
 _Released 2019-06-25_
 
@@ -326,7 +476,7 @@ _Released 2019-06-25_
 * Fix `C4146` error on UWP MSVC
 * Add CONTRIBUTING.md
 
-# 0.1.1
+## 0.1.1
 
 _Released 2019-06-25_
 
@@ -338,7 +488,7 @@ _Released 2019-06-25_
 * Fix compilation error when using `scn::ranges::get_value`.
 * Fix a badge in README (thanks [@p1v0t](https://github.com/p1v0t))
 
-# 0.1
+## 0.1
 
 _Released 2019-06-23_
 

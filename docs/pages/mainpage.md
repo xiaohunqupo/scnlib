@@ -12,7 +12,7 @@ The code lives over at GitHub, at https://github.com/eliaskosunen/scnlib.
 #include <print> // for std::print, C++23
 
 int main() {
-    auto result = scn::scan<int, double>("[42, 3.14]", "[{}, {}]");
+    auto result = scn::scan<int, double>("42, 3.14", "{}, {}");
     if (result) {
         auto [first, second] = result->values();
         std::println("first: {}, second: {}", first, second);
@@ -23,11 +23,10 @@ int main() {
 
 \section main-about About this documentation
 
-This documentation is for the version 2.0 of the library.
-For version 1.1, see https://v1.scnlib.dev/.
+This documentation is for the version 3.0 of the library.
+For version 2.0.3, see https://scnlib.dev/v2.0.3/.
 
 An introductory guide to the library can be found at \ref guide "Guide".
-Instructions for migrating to v2.0 from v1.1 can be found at \ref migration-2-0 "Migration Guide v1.1 -> v2.0".
 
 The API documentation is organized into modules, that can be found under Modules, behind the link at the top of the page.
 It can be searched directly using the search function in the navbar, or by pressing the TAB key.
@@ -72,7 +71,7 @@ Another option would be usage through CMake's `FetchContent` module.
 FetchContent_Declare(
         scn
         GIT_REPOSITORY  https://github.com/eliaskosunen/scnlib
-        GIT_TAG         v2.0.2
+        GIT_TAG         v3.0.1
         GIT_SHALLOW     TRUE
 )
 FetchContent_MakeAvailable(scn)
@@ -85,27 +84,23 @@ target_link_libraries(my_program scn::scn)
 \subsection main-deps Dependencies
 
 scnlib internally depends on
-<a href="https://github.com/fastfloat/fast_float">fast_float</a> and
-<a href="https://github.com/simdutf/simdutf">simdutf</a>.
+<a href="https://github.com/fastfloat/fast_float">fast_float</a>.
 
-By default, the CMake machinery automatically fetches, builds, and links these libraries through `FetchContent`.
-These libraries are only used in the implementation, and they are not visible to the users of the library.
+By default, the CMake machinery automatically fetches, builds, and links it with `FetchContent`.
+It's only used in the implementation, and it isn't visible to the users of the library.
 
-Alternatively, by setting the CMake options `SCN_USE_EXTERNAL_FAST_FLOAT` or `SCN_USE_EXTERNAL_SIMDUTF` to `ON`,
-these libraries are searched for using `find_package`. Use these options, if you already have these libraries
-installed.
+Alternatively, by setting the CMake option `SCN_USE_EXTERNAL_FAST_FLOAT` to `ON`,
+fast_float is searched for using `find_package`. Use this option
+if you already have the library installed.
 
 To enable support for regular expressions, a regex engine backend is required.
 The default option is to use `std::regex`, but an alternative can be picked
 by setting `SCN_REGEX_BACKEND` to `Boost` or `re2` in CMake.
 These libraries are not downloaded with `FetchContent`, but must be found externally.
 
-If your standard library doesn't have an available C++20 `<ranges>` implementation,
-a single-header version of <a href="https://github.com/tcbrindle/nanorange">NanoRange</a>
-is also bundled with the library, inside the directory `include/scn/external`.
-
 The tests and benchmarks described below depend on GTest and Google Benchmark, respectively.
-These libraries are also fetched with `FetchContent`, if necessary.
+These libraries are also fetched with `FetchContent`, if necessary,
+controllable with `SCN_USE_EXTERNAL_GTEST` and `SCN_USE_EXTERNAL_BENCHMARK`, respectively.
 
 <table>
 <caption>
@@ -120,15 +115,8 @@ Library dependencies
 </tr>
 
 <tr>
-<td>simdutf</td>
-<td>`>= 4.0.0`</td>
-<td>✅</td>
-<td>Downloaded by default with `FetchContent`, controlled with `SCN_USE_EXTERNAL_SIMDUTF`.<br>If not using CMake, must be manually linked with your final build.</td>
-</tr>
-
-<tr>
 <td>fast_float</td>
-<td>`>= 6.0.0`</td>
+<td>`>= 5.0.0`</td>
 <td>✅</td>
 <td>Header only. Downloaded by default with `FetchContent`, controlled with `SCN_USE_EXTERNAL_FAST_FLOAT`.</td>
 </tr>
@@ -181,11 +169,10 @@ $ sudo cpupower frequency-set --governor powersave
 
 \subsection main-without-cmake Without CMake
 
-As mentioned above, the implementation of scnlib depends on fast_float and simdutf.
-If you're not using CMake, you'll need to download and build these libraries yourself,
-and link them with your final binary.
-Note, that fast_float is a header-only library, so there's nothing to link,
-but simdutf isn't.
+As mentioned above, the implementation of scnlib depends on fast_float.
+If you're not using CMake, you'll need to download it yourself, and
+make it available for the build.
+Since fast_float is a header-only library, it doesn't need to be built.
 
 Headers for scnlib can be found from the `include/` directory, and source files from the `src/` directory.
 
@@ -194,16 +181,15 @@ Building and linking the library:
 \code{.sh}
 $ mkdir build
 $ cd build
-$ c++ -c -I../include/ ../src/*.cpp -Ipath-to-fast-float -Ipath-to-simdutf
+$ c++ -c -I../include/ ../src/*.cpp -Ipath-to-fast-float
 $ ar rcs libscn.a *.o
 \endcode
 
 `libscn.a` can then be linked, as usual, with your project.
-Don't forget to also include `simdutf` to be linked.
 
 \code{.sh}
 # in your project
-$ c++ ... -Lpath-to-scn/build -lscn -Lpath-to-simdutf -lsimdutf
+$ c++ ... -Lpath-to-scn/build -lscn
 \endcode
 
 Note, that scnlib requires at least C++17,
@@ -310,19 +296,27 @@ CMake build type configuration
 </tr>
 
 <tr>
-<td>`SCN_USE_EXTERNAL_SIMDUTF`</td>
-<td>✅</td>
-<td>❌</td>
-<td>`OFF`</td>
-<td>Use `find_package` to get simdutf, instead of CMake `FetchContent`</td>
-</tr>
-
-<tr>
 <td>`SCN_USE_EXTERNAL_FAST_FLOAT`</td>
 <td>✅</td>
 <td>❌</td>
 <td>`OFF`</td>
 <td>Use `find_package` to get fast_float, instead of CMake `FetchContent`</td>
+</tr>
+
+<tr>
+<td>`SCN_USE_EXTERNAL_GTEST`</td>
+<td>✅</td>
+<td>❌</td>
+<td>`OFF`</td>
+<td>Use `find_package` to get GTest, instead of CMake `FetchContent`</td>
+</tr>
+
+<tr>
+<td>`SCN_USE_EXTERNAL_BENCHMARK`</td>
+<td>✅</td>
+<td>❌</td>
+<td>`OFF`</td>
+<td>Use `find_package` to get Google Benchmark, instead of CMake `FetchContent`</td>
 </tr>
 
 <tr>

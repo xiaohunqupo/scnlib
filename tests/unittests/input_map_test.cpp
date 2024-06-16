@@ -17,8 +17,7 @@
 
 #include "wrapped_gtest.h"
 
-#include <scn/detail/input_map.h>
-#include <scn/util/span.h>
+#include <scn/scan.h>
 
 #include <deque>
 
@@ -31,15 +30,15 @@ using ::testing::Test;
 using namespace std::string_view_literals;
 
 namespace {
-    template <typename Range>
-    std::string collect(Range r)
-    {
-        std::string str;
-        for (auto it = scn::ranges::begin(r); it != scn::ranges::end(r); ++it) {
-            str.push_back(*it);
-        }
-        return str;
+template <typename Range>
+std::string collect(Range r)
+{
+    std::string str;
+    for (auto it = scn::ranges::begin(r); it != scn::ranges::end(r); ++it) {
+        str.push_back(*it);
     }
+    return str;
+}
 }  // namespace
 
 TEST(InputMapTest, RefBuffer)
@@ -77,15 +76,17 @@ TEST(InputMapTest, StdString)
     EXPECT_EQ(collect(buf.get()), "foobar");
 }
 
+#if SCN_HAS_STD_SPAN
 TEST(InputMapTest, Span)
 {
     auto str = "foobar"sv;
     auto buf = scn::detail::make_scan_buffer(
-        scn::span<const char>{str.data(), str.size()});
+        std::span<const char>{str.data(), str.size()});
     static_assert(std::is_same_v<decltype(buf),
                                  scn::detail::basic_scan_string_buffer<char>>);
     EXPECT_EQ(collect(buf.get()), "foobar");
 }
+#endif
 
 TEST(InputMapTest, StringViewTake)
 {
@@ -97,25 +98,26 @@ TEST(InputMapTest, StringViewTake)
 }
 #endif
 
-TEST(InputMapTest, ReversedStringView)
-{
-    auto buf =
-        scn::detail::make_scan_buffer(scn::ranges::reverse_view("foobar"sv));
-    static_assert(
-        std::is_same_v<decltype(buf),
-                       scn::detail::basic_scan_forward_buffer_impl<
-                           scn::ranges::reverse_view<std::string_view>>>);
-    EXPECT_EQ(collect(buf.get()), "raboof");
-}
-
 TEST(InputMapTest, Deque)
 {
     auto str = std::deque<char>{'f', 'o', 'o', 'b', 'a', 'r'};
     auto buf = scn::detail::make_scan_buffer(str);
     static_assert(
+        std::is_same_v<
+            decltype(buf),
+            scn::detail::basic_scan_forward_buffer_impl<std::deque<char>>>);
+    EXPECT_EQ(collect(buf.get()), "foobar");
+}
+
+TEST(InputMapTest, DequeSubrange)
+{
+    auto str = std::deque<char>{'f', 'o', 'o', 'b', 'a', 'r'};
+    auto subr = scn::ranges::subrange{str.begin(), str.end()};
+    auto buf = scn::detail::make_scan_buffer(subr);
+    static_assert(
         std::is_same_v<decltype(buf),
                        scn::detail::basic_scan_forward_buffer_impl<
-                           scn::ranges::ref_view<const std::deque<char>>>>);
+                           scn::ranges::subrange<std::deque<char>::iterator>>>);
     EXPECT_EQ(collect(buf.get()), "foobar");
 }
 

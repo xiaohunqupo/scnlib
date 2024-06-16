@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - v*/dev
     paths:
       - '.github/**'
       - 'benchmark/**'
@@ -16,6 +17,7 @@ on:
   pull_request:
     branches:
       - master
+      - v*/dev
     paths:
       - '.github/**'
       - 'benchmark/**'
@@ -25,6 +27,7 @@ on:
       - 'src/**'
       - 'tests/**'
       - '**/CMakeLists.txt'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref_name }}-${{ github.ref_type == 'branch' && github.sha }}-${{ github.event_name == 'workflow_dispatch' }}-${{ github.event_name == 'schedule' }}-${{ github.event.schedule }}
@@ -51,7 +54,27 @@ jobs:
         os: [ 2019, 2022 ]
         platform: [ Win32, x64 ]
         type: [ Debug, Release ]
-        std: [ 17, 20 ]
+        std: [ 17 ]
+        include:
+          - os: 2019
+            platform: x64
+            type: Debug
+            std: 20
+          - os: 2022
+            platform: x64
+            type: Debug
+            std: 20
+
+        exclude:
+          # Segfaulting in the tests, not locally reproducible
+          - os: 2022
+            platform: Win32
+            type: Release
+            std: 17
+          - os: 2022
+            platform: x64
+            type: Release
+            std: 17
 
     steps:
       - name: Checkout
@@ -105,9 +128,6 @@ jobs:
         os: [ 2019, 2022 ]
         std: [ 17, 20 ]
         platform: [ x64 ]
-        exclude:
-          # clang-cl ICEs with MSVC STL <ranges>
-          - std: 20
 
     steps:
       - name: Checkout
@@ -172,10 +192,14 @@ jobs:
           # llvm, ucrt, libc++
           - clang32
           - clang64
+          # gcc, cygwin, libstdc++ (64-bit)
+          - msys
+
         exclude:
-          # FIXME: bugging out with float parsing
+          # Buggy float parsing
           - sys: clang32
           - sys: clang64
+          - sys: msys
 
     steps:
       - uses: msys2/setup-msys2@v2

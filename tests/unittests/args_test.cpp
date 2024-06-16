@@ -17,18 +17,16 @@
 
 #include "wrapped_gtest.h"
 
-#include <scn/detail/args.h>
-#include <scn/detail/context.h>
+#include <scn/scan.h>
 
 using ::testing::Test;
 
 TEST(ArgsTest, ArgTypeMapping)
 {
-    static_assert(
-        scn::detail::mapped_type_constant<int, scn::scan_context>::value ==
-        scn::detail::arg_type::int_type);
+    static_assert(scn::detail::mapped_type_constant<int, char>::value ==
+                  scn::detail::arg_type::int_type);
     static_assert(scn::detail::mapped_type_constant<scn::detail::dummy_type,
-                                                    scn::scan_context>::value ==
+                                                    char>::value ==
                   scn::detail::arg_type::custom_type);
 
     // narrow context, narrow char -> valid
@@ -85,7 +83,8 @@ TEST(ArgsTest, ArgStore)
     EXPECT_EQ(args.get(1).type(), scn::detail::arg_type::double_type);
 
     *static_cast<int*>(args.get(0).value().ref_value) = 42;
-    EXPECT_EQ(std::get<0>(store.args()), 42);
 
-    EXPECT_DOUBLE_EQ(std::get<1>(store.args()), 0.0);
+    auto tup = std::move(store.args());
+    EXPECT_EQ(std::get<0>(tup), 42);
+    EXPECT_DOUBLE_EQ(std::get<1>(tup), 0.0);
 }

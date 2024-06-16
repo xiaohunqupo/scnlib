@@ -17,22 +17,22 @@
 
 #include "wrapped_gtest.h"
 
-#include <scn/detail/scan_buffer.h>
+#include <scn/scan.h>
 
 #include <deque>
 
 using namespace std::string_view_literals;
 
 namespace {
-    template <typename Range>
-    std::string collect(Range r)
-    {
-        std::string str;
-        for (auto it = scn::ranges::begin(r); it != scn::ranges::end(r); ++it) {
-            str.push_back(*it);
-        }
-        return str;
+template <typename Range>
+std::string collect(Range r)
+{
+    std::string str;
+    for (auto it = scn::ranges::begin(r); it != scn::ranges::end(r); ++it) {
+        str.push_back(*it);
     }
+    return str;
+}
 }  // namespace
 
 TEST(ScanBufferTest, StringView)
@@ -49,49 +49,6 @@ TEST(ScanBufferTest, StringView)
               "foobar");
 }
 
-TEST(ScanBufferTest, TakeStringView)
-{
-    auto range = scn::ranges::take_view("foobar"sv, 3);
-    auto buf = scn::detail::make_forward_scan_buffer(range);
-    static_assert(
-        std::is_same_v<
-            decltype(buf),
-            scn::detail::basic_scan_forward_buffer_impl<decltype(range)>>);
-
-    EXPECT_FALSE(buf.is_contiguous());
-    EXPECT_EQ(buf.chars_available(), 0);
-
-    auto view = buf.get();
-    auto it = view.begin();
-    EXPECT_NE(it, view.end());
-    EXPECT_EQ(*it, 'f');
-    ++it;
-    EXPECT_NE(it, view.end());
-    EXPECT_EQ(*it, 'o');
-    ++it;
-    EXPECT_NE(it, view.end());
-
-    EXPECT_EQ(collect(buf.get()), "foo");
-    EXPECT_EQ(buf.chars_available(), 3);
-    EXPECT_EQ(collect(buf.get()), "foo");
-}
-
-TEST(ScanBufferTest, ReverseStringView)
-{
-    auto range = scn::ranges::reverse_view("foobar"sv);
-    auto buf = scn::detail::make_forward_scan_buffer(range);
-    static_assert(
-        std::is_same_v<
-            decltype(buf),
-            scn::detail::basic_scan_forward_buffer_impl<decltype(range)>>);
-
-    EXPECT_FALSE(buf.is_contiguous());
-    EXPECT_EQ(buf.chars_available(), 0);
-
-    EXPECT_EQ(collect(buf.get()), "raboof");
-    EXPECT_EQ(buf.chars_available(), 6);
-}
-
 TEST(ScanBufferTest, Deque)
 {
     auto src = "foobar"sv;
@@ -101,19 +58,22 @@ TEST(ScanBufferTest, Deque)
     auto buf = scn::detail::make_forward_scan_buffer(deque);
 
     auto it = buf.get().begin();
-    (void)(it != buf.get().end());
+    EXPECT_NE(it, buf.get().end());
     ++it;
-    (void)*it;
+    EXPECT_EQ(*it, 'o');
     ++it;
-    (void)(it != buf.get().end());
-    (void)*it;
+    EXPECT_NE(it, buf.get().end());
+    EXPECT_EQ(*it, 'o');
     ++it;
     ++it;
-    (void)*it;
+    EXPECT_EQ(*it, 'a');
 
+    auto last_it = it;
     it = buf.get().begin();
     ++it;
+    EXPECT_NE(it, buf.get().end());
 
+    EXPECT_EQ(collect(scn::ranges::subrange{it, last_it}), "oob");
     EXPECT_EQ(collect(scn::ranges::subrange{it, buf.get().end()}), "oobar");
 }
 
@@ -133,7 +93,8 @@ TEST(ScanBufferTest, Deque2)
     EXPECT_EQ(*it, 'b');
 
     auto cached_it = it;
-    scn::ranges::advance(it, 4, buf.get().end());
+    ++it;
+    ++it;
     EXPECT_EQ(it, buf.get().end());
     EXPECT_EQ(collect(scn::ranges::subrange{cached_it,
                                             std::next(buf.get().begin(), 2)}),

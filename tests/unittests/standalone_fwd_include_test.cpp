@@ -15,17 +15,6 @@
 // This file is a part of scnlib:
 //     https://github.com/eliaskosunen/scnlib
 
-#include <scn/detail/scan.h>
+#include <scn/fwd.h>
 
-namespace scn {
-SCN_BEGIN_NAMESPACE
-
-namespace detail {
-scan_error handle_error(scan_error e)
-{
-    return e;
-}
-}  // namespace detail
-
-SCN_END_NAMESPACE
-}  // namespace scn
+// empty
